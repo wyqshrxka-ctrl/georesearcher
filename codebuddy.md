@@ -51,9 +51,26 @@ research_agent/
 - 版本号从 `v1` 起，同一文档重大修订递增（`v2`、`v3`…）。
 - 放置：`plan`/`design` → `docs/`（入 git）；`research` → `docs2/`（不入 git）。
 
-## 7. 当前进度
+## 7. 架构决策（2026-07-04 grill 结论，10 条）
+
+1. **做深模块**：(a)RAG+评估、(f)GIS工具链、(g)顶刊绘图 三个做深；(b)检索入库、(c)解读归档 做 demo 级；(d)找创新点、(h)学术写作 初期预留占位、后续接成熟 skill（如 awesome-ai-research-writing）；**(e)跑实验闭环先不做，仅预留接口**。
+2. **multi-agent 形态**：**编排式（orchestrated）**，非真自主 multi-agent（避免 agent 间通信/失控/成本翻倍）。目标编排式，路径可先单 agent 跑通再拆专职节点。
+3. **编排框架**：**LangGraph** 管编排 + **LlamaIndex** 管 RAG/知识库，**编排层与检索层解耦**。
+4. **向量库**：抽象 `VectorStore` **双模式**——默认 **Chroma**（嵌入式、demo 友好），可切 **Milvus**（生产/简历资产）。
+5. **结构化存储**：**SQLite**（文献约 200 篇够用）；引用关系存 citation edges 表，**预留 Neo4j 知识图谱升级钩子**。
+6. **Embedding**：**本地 bge-m3**（中英跨语言 + 稠密/稀疏混合检索）+ bge-small 快速档；不做抽象（避免过度设计）。
+7. **评估 judge model**：**可配置，默认 DeepSeek**，验证期可切强模型交叉对照 + 人工抽检校准。需掌握 LLM-as-judge 三坑（自我偏好/位置长度偏差/一致性）。
+8. **可维护性=硬约束**：四层分层（编排层/能力层/存储层/模型层，层间走接口）；每个能力模块=独立 package + 可单测；配置集中；AI 改动须附测试。
+9. **交付形态**：**CLI/Python 内核 + Streamlit demo**（逻辑与 UI 解耦）；README 做得有展示力（架构图/徽章/gif）。不用 Vue3（留在旧项目简历）。
+10. **文档**：写 **ADR（架构决策记录）** 进 README + docs；额外产出**面试追问应答手册**。
+
+> 决策依据的原则：可展示性优先、可维护 > 花哨、stability > novelty；该抽象的抽象（VectorStore/judge），不该抽的不抽（embedding）。
+
+## 8. 当前进度
 
 - [x] 初始化 git 仓库、目录结构、规范
-- [ ] 完成深度版调研报告（docs2/research--20260704--v1.md）
-- [ ] 完成 design 方案设计文档
-- [ ] 完成 plan 开发计划文档
+- [x] 完成深度版调研报告（docs2/research--20260704--v1.md）
+- [x] 完成架构 grill（10 条决策）
+- [ ] 完成 design 方案设计文档（docs/design--20260704--v1.md）
+- [ ] 完成 plan 开发计划文档（docs/plan--20260704--v1.md）
+- [ ] 完成面试追问应答手册（docs/interview--20260704--v1.md）
