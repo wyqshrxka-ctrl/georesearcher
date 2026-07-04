@@ -1,0 +1,15 @@
+docs2/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
