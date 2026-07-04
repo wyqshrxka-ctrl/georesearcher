@@ -65,7 +65,6 @@ uv run georesearcher doctor
 |---|---|
 | [design](docs/design--20260704--v1.md) | 架构、模块、三层记忆、RAG 评估、MCP、11 条 ADR、执行者交接规范 |
 | [plan](docs/plan--20260704--v1.md) | M0–M8 分阶段开发计划，每阶段可 demo |
-| [interview](docs/interview--20260704--v1.md) | 技术选型面试应答手册（含"如何用 AI 开发项目"） |
 
 ## 🧭 路线图
 

@@ -73,7 +73,7 @@ research_agent/
 - [x] 完成架构 grill（10 条决策）
 - [x] 完成 design 方案设计文档（docs/design--20260704--v1.md，含执行者交接规范 §12、AI 开发方法论 §13）
 - [x] 完成 plan 开发计划文档（docs/plan--20260704--v1.md）
-- [x] 完成面试追问应答手册（docs/interview--20260704--v1.md）
+- [x] 完成面试追问应答手册（docs2/interview--20260704--v1.md，**不入 git、不公开**）
 - [x] **M0 骨架完成**：pyproject（Python 3.11, uv）、config.yaml+.env.example、四层分层、types.py（pydantic 共享结构）、模型层（DeepSeek LLM/judge + 本地 bge-m3，均延迟加载）、存储层（VectorStore 协议 + Chroma 实现 + Milvus 桩 + SQLite papers/notes/citations）、CLI（version/doctor）、README、8 个单测全绿。commit 8da7757。
 - [ ] M1 RAG 内核重构（下一步）
 
