@@ -36,6 +36,11 @@ retrieval:
   use_hyde: true
   use_multi_query: true
   use_reranker: true
+  use_bm25: true                # BM25 稀疏检索
+  use_cross_encoder: true       # 交叉编码器精细排序
+  rrf_k: 60                     # RRF 融合参数
+  hybrid_candidates: 40         # 各检索器召回数
+  rerank_candidates: 20         # 进入交叉编码器的候选数
 
 paths:
   data_dir: ./data

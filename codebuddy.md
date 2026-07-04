@@ -75,10 +75,15 @@ research_agent/
 - [x] 完成 plan 开发计划文档（docs/plan--20260704--v1.md）
 - [x] 完成面试追问应答手册（docs2/interview--20260704--v1.md，**不入 git、不公开**）
 - [x] **M0 骨架完成**：pyproject（Python 3.11, uv）、config.yaml+.env.example、四层分层、types.py（pydantic 共享结构）、模型层（DeepSeek LLM/judge + 本地 bge-m3，均延迟加载）、存储层（VectorStore 协议 + Chroma 实现 + Milvus 桩 + SQLite papers/notes/citations）、CLI（version/doctor）、README、8 个单测全绿。commit 8da7757。
-- [ ] M1 RAG 内核重构（下一步）
+- [x] **M1 RAG 内核完成**：HyDE + 多查询并行 + 混合检索（稠密 bge-m3 + 稀疏 BM25）+ RRF 融合 + 交叉编码器重排序（bge-reranker-v2-m3）+ TTLCache 缓存 + 父块扩展上下文 + APA 引用接地生成。知识库已导入 93 篇论文、25,827 个段落向量、629 个 section 父块。CLI 可完整问答。
+- [ ] M2 RAG 评估（下一步）
 
 ## 9. 关键工程事实（供后续会话）
 - Python 3.11（/opt/homebrew，uv 管理）；venv 在 .venv/。运行命令用 `uv run georesearcher ...` 或 `uv run pytest`。
 - 重依赖（llama-index/sentence-transformers/pymupdf/ragas/streamlit/mcp）是 pyproject 的 optional extras（rag/eval/ui/gis），M0 未装，按里程碑再装。
 - 模型/embedding 均延迟加载：无 API key、未装 rag extra 时骨架仍可跑（doctor/smoke 不触发网络与模型下载）。
 - data/、.venv/、.env 均已 gitignore；uv.lock 入库保证可复现。
+- **M1 混合检索**：稠密 bge-m3（Chroma）+ 稀疏 BM25（rank_bm25，内存索引 25k 文档，中英混合分词）+ RRF 融合（k=60）+ 交叉编码器 bge-reranker-v2-m3 重排序。配置项在 `config.yaml` 的 `retrieval` 段。
+- **知识库规模**：93 篇论文，25,827 个段落向量（Chroma），629 个 section 父块（SQLite）。主题：教育不平等/学校隔离，中欧美跨地区。
+- **向量化工具**：`scripts/batch_ingest.py` 支持两阶段导入（fast/vectorize），有断点续跑（`data/vectorized_papers.txt`）、tqdm 进度条、`status` 命令。
+- **论文元数据**：`data/paper_metadata.csv`，含 93 篇论文的标题/作者/DOI/年份/LLM 标注标签。

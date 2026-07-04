@@ -55,6 +55,11 @@ class RetrievalCfg(BaseModel):
     use_hyde: bool = True
     use_multi_query: bool = True
     use_reranker: bool = True
+    use_bm25: bool = True
+    use_cross_encoder: bool = True
+    rrf_k: int = 60
+    hybrid_candidates: int = 40
+    rerank_candidates: int = 20
 
 
 class Config(BaseModel):

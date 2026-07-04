@@ -24,8 +24,9 @@ dependencies = [
 # Heavy / stage-specific deps are opt-in so M0 stays lightweight and clone-runnable.
 rag = [
     "llama-index-core>=0.11",
-    "sentence-transformers>=3.0",  # bge-m3 / bge-small
+    "sentence-transformers>=3.0",  # bge-m3 / bge-small + cross-encoder reranker
     "pymupdf>=1.24",               # import name: fitz
+    "rank-bm25>=0.2.2",            # BM25 sparse retrieval
 ]
 eval = ["ragas>=0.2"]
 ui = ["streamlit>=1.37"]

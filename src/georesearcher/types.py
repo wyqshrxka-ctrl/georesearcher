@@ -21,6 +21,7 @@ class Paper(BaseModel):
     pdf_path: str | None = None
     oa_status: str | None = None  # open-access 状态：green/gold/closed/None
     retracted: bool = False
+    tags: list[str] = Field(default_factory=list)  # 分类标签，如 ["教育不平等/学校隔离", "中国"]
 
 
 class Chunk(BaseModel):
