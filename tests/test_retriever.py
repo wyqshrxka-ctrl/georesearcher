@@ -5,9 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from georesearcher.capabilities.rag.retriever import RetrievalConfig, RetrievalPipeline
+from georesearcher.capabilities.rag.retriever import (
+    RetrievalConfig,
+    RetrievalPipeline,
+    RetrievalResult,
+)
 from georesearcher.config import load_config
-from georesearcher.types import Retrieved
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -34,9 +37,9 @@ def test_retrieve_returns_results(pipeline):
     assert isinstance(results, list)
     assert len(results) > 0
     for r in results:
-        assert isinstance(r, Retrieved)
-        assert len(r.chunk.text) > 0
-        assert r.score >= 0.0
+        assert isinstance(r, RetrievalResult)
+        assert len(r.child_chunk.chunk.text) > 0
+        assert r.child_chunk.score >= 0.0
 
 
 def test_retrieve_without_hyde(pipeline):
@@ -66,6 +69,6 @@ def test_retrieval_cache(pipeline):
     results2 = pipeline.retrieve("spatial autocorrelation in urban studies")
 
     # 缓存命中时结果应该一致
-    ids1 = [r.chunk.id for r in results1]
-    ids2 = [r.chunk.id for r in results2]
+    ids1 = [r.child_chunk.chunk.id for r in results1]
+    ids2 = [r.child_chunk.chunk.id for r in results2]
     assert ids1 == ids2

@@ -316,15 +316,41 @@ class RetrievalPipeline:
         config: RetrievalConfig | None = None,
         skip_cache: bool = False,
     ) -> list[RetrievalResult]:
-        """主检索入口：混合检索 → RRF 融合 → 交叉编码器重排序。"""
+        """主检索入口：混合检索 → RRF 融合 → 交叉编码器重排序 → 父块扩展。"""
+        final = self.retrieve_raw(query, config=config, skip_cache=skip_cache)
+        return self._results_to_retrieval_results(final)
+
+    def retrieve_raw(
+        self,
+        query: str,
+        *,
+        config: RetrievalConfig | None = None,
+        skip_cache: bool = False,
+    ) -> list[Retrieved]:
+        """返回排序后的原始命中（父块扩展前），供评估层计算检索指标用。
+
+        与 retrieve() 的区别：不做父块扩展，直接返回 list[Retrieved]，
+        便于取每个命中的 chunk.paper_id 与排名（Hit@k / MRR / NDCG）。
+        """
         rc = config or self._build_config()
 
         use_cache = not skip_cache and len(query) > 20
         if use_cache:
             cached = self._cache.get(query)
             if cached is not None:
-                return self._results_to_retrieval_results(cached[: rc.top_k])
+                return cached[: rc.top_k]
 
+        final = self._retrieve_ranked(query, rc)
+
+        if use_cache:
+            self._cache.set(query, final)
+
+        return final
+
+    def _retrieve_ranked(
+        self, query: str, rc: RetrievalConfig
+    ) -> list[Retrieved]:
+        """核心检索逻辑：tag 过滤 → 多查询 → 稠密+稀疏 → RRF → 重排序 → top_k。"""
         # 1. 标签预过滤
         candidate_ids: list[str] | None = None
         if rc.use_tag_filter:
@@ -400,15 +426,7 @@ class RetrievalPipeline:
             elif rc.use_reranker:
                 candidates = self._rerank(query, candidates, rc.top_k)
 
-        final = candidates[: rc.top_k]
-
-        # 6. 父块扩展
-        results = self._results_to_retrieval_results(final)
-
-        if use_cache:
-            self._cache.set(query, final)
-
-        return results
+        return candidates[: rc.top_k]
 
     def _results_to_retrieval_results(
         self, retrieved: list[Retrieved]
@@ -486,11 +504,19 @@ class RetrievalPipeline:
 
     def _generate_hyde(self, query: str) -> str:
         prompt = _HYDE_PROMPT.format(question=query)
-        return self._llm.complete(prompt, temperature=0.7)
+        try:
+            return self._llm.complete(prompt, temperature=0.7)
+        except Exception:
+            # HyDE 失败则退回纯 query 检索，不让整条检索崩
+            return ""
 
     def _generate_multi_queries(self, query: str, count: int) -> list[str]:
         prompt = _MULTI_QUERY_PROMPT.format(question=query, num_queries=count)
-        resp = self._llm.complete(prompt, temperature=0.7)
+        try:
+            resp = self._llm.complete(prompt, temperature=0.7)
+        except Exception:
+            # 多查询扩展失败则退回单查询
+            return [query]
         lines = [
             line.strip().lstrip("-•0123456789. ")
             for line in resp.split("\n")
