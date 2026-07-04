@@ -71,6 +71,14 @@ research_agent/
 - [x] 初始化 git 仓库、目录结构、规范
 - [x] 完成深度版调研报告（docs2/research--20260704--v1.md）
 - [x] 完成架构 grill（10 条决策）
-- [ ] 完成 design 方案设计文档（docs/design--20260704--v1.md）
-- [ ] 完成 plan 开发计划文档（docs/plan--20260704--v1.md）
-- [ ] 完成面试追问应答手册（docs/interview--20260704--v1.md）
+- [x] 完成 design 方案设计文档（docs/design--20260704--v1.md，含执行者交接规范 §12、AI 开发方法论 §13）
+- [x] 完成 plan 开发计划文档（docs/plan--20260704--v1.md）
+- [x] 完成面试追问应答手册（docs/interview--20260704--v1.md）
+- [x] **M0 骨架完成**：pyproject（Python 3.11, uv）、config.yaml+.env.example、四层分层、types.py（pydantic 共享结构）、模型层（DeepSeek LLM/judge + 本地 bge-m3，均延迟加载）、存储层（VectorStore 协议 + Chroma 实现 + Milvus 桩 + SQLite papers/notes/citations）、CLI（version/doctor）、README、8 个单测全绿。commit 8da7757。
+- [ ] M1 RAG 内核重构（下一步）
+
+## 9. 关键工程事实（供后续会话）
+- Python 3.11（/opt/homebrew，uv 管理）；venv 在 .venv/。运行命令用 `uv run georesearcher ...` 或 `uv run pytest`。
+- 重依赖（llama-index/sentence-transformers/pymupdf/ragas/streamlit/mcp）是 pyproject 的 optional extras（rag/eval/ui/gis），M0 未装，按里程碑再装。
+- 模型/embedding 均延迟加载：无 API key、未装 rag extra 时骨架仍可跑（doctor/smoke 不触发网络与模型下载）。
+- data/、.venv/、.env 均已 gitignore；uv.lock 入库保证可复现。
