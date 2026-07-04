@@ -1,0 +1,41 @@
+# GeoResearcher 集中配置（ADR-07：切后端/模型只改这里）
+# 执行者注意：密钥不写这里，走 .env（见 .env.example）。
+
+models:
+  llm:
+    provider: deepseek            # OpenAI 兼容
+    base_url: https://api.deepseek.com
+    model: deepseek-chat          # 推理任务可换 deepseek-reasoner
+    temperature: 0.3
+    api_key_env: DEEPSEEK_API_KEY # 从该环境变量读取，勿硬编码
+  judge:                          # RAG 评估用；默认同 LLM，验证期可切强模型
+    provider: deepseek
+    base_url: https://api.deepseek.com
+    model: deepseek-chat
+    temperature: 0.0
+    api_key_env: DEEPSEEK_API_KEY
+  embedding:
+    provider: local               # 本地 bge，消除外部依赖
+    model: BAAI/bge-m3            # 快速体验可换 BAAI/bge-small-zh-v1.5
+    device: cpu                   # 有 GPU 可设 cuda / mps
+
+storage:
+  vector_store:
+    backend: chroma               # chroma（默认，嵌入式） | milvus（生产，留桩）
+    persist_dir: ./data/chroma
+    collection: papers
+  sqlite:
+    path: ./data/georesearcher.db
+  files:
+    pdf_dir: ./data/pdfs
+    figure_dir: ./data/figures
+    report_dir: ./data/reports
+
+retrieval:
+  top_k: 5
+  use_hyde: true
+  use_multi_query: true
+  use_reranker: true
+
+paths:
+  data_dir: ./data
