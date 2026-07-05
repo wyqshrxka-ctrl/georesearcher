@@ -155,3 +155,49 @@ def test_aggregate_averages():
 def test_aggregate_empty():
     m = aggregate_retrieval([], k=7)
     assert m.hit_rate == 0.0 and m.mrr == 0.0 and m.k == 7
+
+
+# ---------- 多篇 GT（评估集升级后）：recall/precision 有分辨力 ----------
+
+def test_multi_gt_recall_partial():
+    # 3 篇 gold，top5 命中 2 篇（p1,p3）→ recall = 2/3
+    pred = ["p1", "p8", "p3", "p9", "p7"]
+    gold = ["p1", "p2", "p3"]
+    assert math.isclose(context_recall(pred, gold, k=5), 2 / 3)
+
+
+def test_multi_gt_precision():
+    # top5 命中 2 篇 gold → precision = 2/5 = 0.4
+    pred = ["p1", "p8", "p3", "p9", "p7"]
+    gold = ["p1", "p2", "p3"]
+    assert context_precision(pred, gold, k=5) == 0.4
+
+
+def test_multi_gt_recall_full():
+    pred = ["p1", "p2", "p3", "p9"]
+    gold = ["p1", "p2", "p3"]
+    assert context_recall(pred, gold, k=5) == 1.0
+
+
+def test_multi_gt_mrr_first_hit():
+    # 多 gold，第一个命中在第 2 位（p2）→ 0.5
+    pred = ["p9", "p2", "p1"]
+    gold = ["p1", "p2", "p3"]
+    assert mrr(pred, gold, k=5) == 0.5
+
+
+def test_multi_gt_ndcg_two_of_three_at_rank_1_and_3():
+    # gold 命中在第 1、3 位：DCG = 1/log2(2) + 1/log2(4) = 1 + 0.5 = 1.5
+    # IDCG（3 个 gold 理想排前三）= 1/log2(2)+1/log2(3)+1/log2(4)
+    pred = ["p1", "p8", "p3", "p9"]
+    gold = ["p1", "p2", "p3"]
+    dcg = 1.0 + 1.0 / math.log2(4)
+    idcg = 1.0 + 1.0 / math.log2(3) + 1.0 / math.log2(4)
+    assert math.isclose(ndcg(pred, gold, k=5), dcg / idcg)
+
+
+def test_multi_gt_hit_rate_any():
+    # 命中任意一篇即 1.0（语义不变）
+    pred = ["p9", "p3", "p8"]
+    gold = ["p1", "p2", "p3"]
+    assert hit_rate(pred, gold, k=5) == 1.0
