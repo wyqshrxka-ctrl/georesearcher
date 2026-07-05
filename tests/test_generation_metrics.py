@@ -8,6 +8,7 @@ import math
 from georesearcher.capabilities.evaluation.generation_metrics import (
     GenerationJudge,
     aggregate_generation,
+    claim_sentences,
     split_sentences,
 )
 
@@ -34,7 +35,7 @@ class _FakeJudge:
         return out
 
 
-# ---------- split_sentences ----------
+# ---------- split_sentences / claim_sentences ----------
 
 def test_split_sentences_mixed():
     s = split_sentences("这是第一句。This is second! 第三句？")
@@ -46,13 +47,49 @@ def test_split_sentences_empty():
     assert split_sentences("   ") == []
 
 
+def test_claim_sentences_drops_references_section():
+    answer = (
+        "流动儿童被分到较差学校。优质学校学位更少。\n\n"
+        "**参考文献**\n"
+        "张玉清, & Chung, H. (2025). 某标题. *某期刊*. https://doi.org/10.1/x\n"
+    )
+    claims = claim_sentences(answer)
+    # 只保留 2 条事实断言，参考文献区块整段被截掉
+    assert len(claims) == 2
+    assert all("参考文献" not in c and "doi.org" not in c for c in claims)
+
+
+def test_claim_sentences_filters_boilerplate():
+    answer = "综上所述，流动儿童被分到较差学校。首先，优质学校学位更少。"
+    claims = claim_sentences(answer)
+    # "综上所述，" 和 "首先，" 这种结构话术开头的短句被过滤，只留真正断言
+    assert any("流动儿童" in c for c in claims)
+    assert not any(c.startswith("综上所述") and len(c) < 6 for c in claims)
+
+
+def test_claim_sentences_filters_inline_citation_line():
+    answer = "流动儿童被分到较差学校。Smith (2020) 提出了某理论。"
+    claims = claim_sentences(answer)
+    # 含 (2020) 的疑似引用句被过滤
+    assert not any("(2020)" in c for c in claims)
+
+
+def test_claim_sentences_empty():
+    assert claim_sentences("") == []
+    assert claim_sentences("**参考文献**\nSmith (2020).") == []
+
+
 # ---------- faithfulness ----------
+
+# 事实断言句需 >=4 字符且非结构话术/引用，才会被送去判定。
+_S1, _S2, _S3 = "流动儿童被分到较差学校。", "优质学校学位更少。", "择校政策效果不明确。"
+
 
 def test_faithfulness_two_of_three_supported():
     # 3 句，judge 返回 yes/no/yes → 2/3 ≈ 0.667
     judge = _FakeJudge(["yes", "no", "yes"])
     gj = GenerationJudge(judge=judge)
-    score = gj.faithfulness("句子一。句子二。句子三。", ["some context"])
+    score = gj.faithfulness(_S1 + _S2 + _S3, ["some context"])
     assert math.isclose(score, 2 / 3)
     assert len(judge.calls) == 3
     # 坑3：temperature=0.0 传下去了
@@ -62,7 +99,7 @@ def test_faithfulness_two_of_three_supported():
 def test_faithfulness_all_supported():
     judge = _FakeJudge(["Yes.", "yes", "YES"])
     gj = GenerationJudge(judge=judge)
-    assert gj.faithfulness("a。b。c。", ["ctx"]) == 1.0
+    assert gj.faithfulness(_S1 + _S2 + _S3, ["ctx"]) == 1.0
 
 
 def test_faithfulness_empty_answer_returns_none():
@@ -75,30 +112,31 @@ def test_faithfulness_all_unparseable_returns_none():
     # judge 全部返回垃圾 → 无可判句 → None（不崩）
     judge = _FakeJudge(["maybe", "???", "garbage"])
     gj = GenerationJudge(judge=judge)
-    assert gj.faithfulness("a。b。c。", ["ctx"]) is None
+    assert gj.faithfulness(_S1 + _S2 + _S3, ["ctx"]) is None
 
 
 def test_faithfulness_partial_unparseable_ignored():
     # 3 句：yes / 垃圾 / no → 只 2 句可判，1 支持 → 0.5
     judge = _FakeJudge(["yes", "hmm", "no"])
     gj = GenerationJudge(judge=judge)
-    assert gj.faithfulness("a。b。c。", ["ctx"]) == 0.5
+    assert gj.faithfulness(_S1 + _S2 + _S3, ["ctx"]) == 0.5
 
 
 def test_faithfulness_judge_exception_returns_none():
     judge = _FakeJudge(["yes"], raise_on_call=True)
     gj = GenerationJudge(judge=judge)
-    assert gj.faithfulness("a。b。", ["ctx"]) is None
+    assert gj.faithfulness(_S1 + _S2, ["ctx"]) is None
 
 
-def test_faithfulness_truncates_context():
+def test_faithfulness_gives_full_context_not_truncated():
+    # 缺陷修复：faithfulness 判定应给完整上下文（不截到 1500），保证支持证据不被漏。
     judge = _FakeJudge(["yes"])
     gj = GenerationJudge(judge=judge)
-    long_ctx = "z" * 5000  # 用 z 避免与 prompt 模板里的字母冲突
-    gj.faithfulness("aaa bbb ccc", [long_ctx])
+    long_ctx = "z" * 5000
+    gj.faithfulness(_S1, [long_ctx])
     prompt = judge.calls[0][0]
-    # 上下文被截断到 1500 → prompt 里恰好 1500 个 z（坑2：长度一致，非全部 5000）
-    assert prompt.count("z") == 1500
+    # 5000 个 z 应全部进入 prompt（远大于旧的 1500 截断）
+    assert prompt.count("z") == 5000
 
 
 # ---------- answer_relevancy ----------

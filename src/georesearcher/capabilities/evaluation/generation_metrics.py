@@ -25,11 +25,28 @@ import re
 from ...models.llm import LLMClient, get_judge
 from .schemas import GenerationMetrics
 
-# 坑2：上下文统一截断长度，与 M1 生成阶段保持一致，避免长度偏差。
+# faithfulness 判定时给 judge 的上下文上限。faithfulness 需要"能否找到支持证据"，
+# 截太短会漏证据把分数压低（实测缺陷来源），故给足；仅在极端超长时兜底截断。
+_FAITH_CTX_MAX = 12000
+# relevancy 不看上下文，无需此常量。保留旧名兼容（answer_relevancy 未用）。
 _CTX_TRUNC = 1500
 
 # 逐句切分（中英文句末标点）。简单可控，避免引入 nltk 等新依赖。
 _SENT_SPLIT = re.compile(r"(?<=[。！？.!?])\s*")
+
+# ── 非事实断言句过滤（faithfulness 只该评"可被上下文支持的事实断言"）──
+# 参考文献区块标题：命中后其后所有内容都不算断言（APA 列表逐条判必然 no，会虚压分数）。
+_REFERENCES_HEADER = re.compile(r"^\**\s*(参考文献|references|引用文献|bibliography)\s*\**\s*$", re.I)
+# 纯结构/元话术句（不携带可核查事实）：开头是这些连接词且很短。
+_BOILERPLATE = re.compile(
+    r"^(综上所述|总的来说|总而言之|首先|其次|再次|此外|另外|最后|具体而言|"
+    r"根据(提供的|上述|以上)?文献|基于(提供的|上述|以上)?(文献|上下文)|"
+    r"in summary|in conclusion|overall|first|second|finally|moreover|furthermore)"
+    r"[，,：:、\s]*$",
+    re.I,
+)
+# 疑似单条参考文献（含 年份括号 + DOI/期刊斜体等）——逐条判会误伤。
+_LOOKS_LIKE_CITATION = re.compile(r"\(\d{4}\)|https?://|doi\.org|\*[^*]+\*")
 
 _FAITHFULNESS_PROMPT = """You are a strict fact-checker. Decide whether the CLAIM is \
 directly supported by the CONTEXT below. Answer with exactly one word: "yes" or "no".
@@ -61,6 +78,41 @@ def split_sentences(text: str) -> list[str]:
     """把答案切成句子（去空白空句）。"""
     parts = [s.strip() for s in _SENT_SPLIT.split(text or "")]
     return [s for s in parts if s]
+
+
+def _strip_references_section(text: str) -> str:
+    """截掉"参考文献/References"标题及其之后的全部内容。
+
+    APA 引用列表逐条送去判 faithfulness 必然被判 no（上下文里没有引用格式），
+    会把分母撑大、分数虚低。它们不是答案的事实断言，应排除。
+    """
+    lines = (text or "").splitlines()
+    kept: list[str] = []
+    for line in lines:
+        if _REFERENCES_HEADER.match(line.strip()):
+            break
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def claim_sentences(answer: str) -> list[str]:
+    """从答案抽取"可被上下文支持的事实断言"句，供 faithfulness 逐句判定。
+
+    过滤：① 参考文献区块；② 纯结构/元话术句（"综上所述"等）；
+    ③ 疑似单条引用（含年份括号/DOI/斜体期刊名）。
+    """
+    body = _strip_references_section(answer)
+    out: list[str] = []
+    for s in split_sentences(body):
+        if _BOILERPLATE.match(s):
+            continue
+        if _LOOKS_LIKE_CITATION.search(s):
+            continue
+        # 太短（如残留的 "首先"）也跳过
+        if len(s) < 4:
+            continue
+        out.append(s)
+    return out
 
 
 def _parse_yes_no(raw: str) -> bool | None:
@@ -100,20 +152,23 @@ class GenerationJudge:
     def model(self) -> str:
         return self._judge.model
 
-    def _truncate_context(self, contexts: list[str]) -> str:
-        """拼接并统一截断上下文（坑2：长度一致）。"""
+    def _join_context(self, contexts: list[str]) -> str:
+        """拼接检索上下文；仅在极端超长时兜底截断（faithfulness 需要足够证据）。"""
         joined = "\n\n".join(c for c in contexts if c)
-        return joined[:_CTX_TRUNC]
+        return joined[:_FAITH_CTX_MAX]
 
     def faithfulness(self, answer: str, contexts: list[str]) -> float | None:
-        """忠实度 = 被上下文支持的句子数 / 总句子数。
+        """忠实度 = 被上下文支持的事实断言句数 / 事实断言句总数。
 
+        只评"可被上下文支持的事实断言"（过滤参考文献列表、结构话术、单条引用），
+        避免这些非断言句把分数虚压（实测缺陷来源）。
+        judge 拿到的是**完整检索上下文**（不做 1500 截断），保证支持证据不被漏掉。
         无可判句子或全部解析失败 → 返回 None（缺失，不计入均值）。
         """
-        sentences = split_sentences(answer)
+        sentences = claim_sentences(answer)
         if not sentences:
             return None
-        context = self._truncate_context(contexts)
+        context = self._join_context(contexts)
 
         supported = 0
         judged = 0
