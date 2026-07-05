@@ -21,3 +21,7 @@ models_cache/
 # IDE
 .idea/
 .vscode/
+
+# Eval set drafts (中间产物，需人工校验后另存 eval_set.json)
+tests/eval_set/eval_set.draft.json
+tests/eval_set/eval_set.smoke.json
