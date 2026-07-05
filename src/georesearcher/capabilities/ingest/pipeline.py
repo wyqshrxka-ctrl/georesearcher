@@ -37,6 +37,11 @@ def _to_chunk(spec: ChunkSpec, embedding: list[float]) -> Chunk:
 def ingest_paper(
     file_path: str | Path,
     *,
+    paper_id: str | None = None,  # B1：外部传入的去重 id，传了就优先用
+    paper_title: str | None = None,
+    paper_authors: list[str] | None = None,
+    paper_doi: str | None = None,
+    paper_year: int | None = None,
     cfg: Config | None = None,
     embedder: Embedder | None = None,
     vector_store: VectorStore | None = None,
@@ -63,28 +68,31 @@ def ingest_paper(
     # 1. 解析
     parsed = parse_pdf(file_path)
 
-    # 2. 推导 paper_id
-    paper_id = _paper_id_from_pdf(parsed)
+    # 2. 推导 paper_id（B1：外部传入优先）
+    if paper_id is not None:
+        pid = paper_id
+    else:
+        pid = _paper_id_from_pdf(parsed)
 
-    # 3. 构造 Paper 元数据
+    # 3. 构造 Paper 元数据（优先用外部传入的覆盖项）
     paper = Paper(
-        id=paper_id,
-        title=parsed.title or Path(file_path).stem,
-        authors=parsed.authors,
-        year=None,
-        doi=parsed.doi or None,
+        id=pid,
+        title=paper_title or parsed.title or Path(file_path).stem,
+        authors=paper_authors if paper_authors is not None else parsed.authors,
+        year=paper_year,
+        doi=paper_doi or parsed.doi or None,
         pdf_path=str(file_path),
-        oa_status=None,
+        oa_status="oa_full",
     )
 
     # 4. 父子分块
-    child_specs, parent_map = chunk_parsed(parsed, paper_id)
+    child_specs, parent_map = chunk_parsed(parsed, pid)
     if not child_specs:
         raise RuntimeError(f"PDF 未提取到可用文本（可能是扫描件）: {file_path}")
 
     # 5. 写入 SQLite（元数据 + 父块）
     sqlite_store.add_paper(paper)
-    sqlite_store.save_parent_chunks(paper_id, parent_map)
+    sqlite_store.save_parent_chunks(pid, parent_map)
 
     # 6. 向量化子块
     texts = [cs.text for cs in child_specs]
@@ -95,5 +103,47 @@ def ingest_paper(
         _to_chunk(cs, emb) for cs, emb in zip(child_specs, embeddings)
     ]
     vector_store.add(chunks)
+
+    return paper
+
+
+def ingest_metadata_only(
+    paper: Paper,
+    abstract: str = "",
+    *,
+    cfg: Config | None = None,
+    embedder: Embedder | None = None,
+    vector_store: VectorStore | None = None,
+    sqlite_store: SqliteStore | None = None,
+) -> Paper:
+    """无 OA 全文的论文入库（plan-m3 A2(a) / B2）。
+
+    - paper.oa_status = "metadata_only"
+    - sqlite_store.add_paper(paper)
+    - 若 abstract 非空：构造 level="abstract" 的 Chunk → embed → vector_store.add
+    - 不写 parent_chunks（摘要无父子结构）
+    """
+    cfg = cfg or load_config()
+    embedder = embedder or get_embedder(cfg)
+    vector_store = vector_store or get_vector_store(cfg)
+    sqlite_store = sqlite_store or get_sqlite_store(cfg)
+
+    # 标记 oa_status
+    paper.oa_status = "metadata_only"
+
+    # 写入元数据
+    sqlite_store.add_paper(paper)
+
+    # 若有摘要：构造单块入向量库
+    if abstract.strip():
+        chunk = Chunk(
+            id=f"{paper.id}::abstract",
+            paper_id=paper.id,
+            text=abstract.strip(),
+            level="abstract",
+        )
+        embeddings = embedder.embed([chunk.text])
+        chunk.embedding = embeddings[0]
+        vector_store.add([chunk])
 
     return paper

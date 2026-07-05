@@ -52,5 +52,13 @@ evaluation:
     hit_rate_low: 0.6             # 检索 hit_rate 低于此 → 判"检索层弱"
     faithfulness_low: 0.7         # 生成 faithfulness 低于此 → 判"生成层弱"
 
+search:                           # M3 检索配置（plan-m3 §4）
+  provider: openalex              # A1：默认唯一实现；arxiv/semantic_scholar 为桩
+  mailto: null                    # A2 polite pool：填你的邮箱
+  rate_limit_per_sec: 3.0         # A2 客户端限速
+  timeout: 20.0
+  max_retries: 2
+  limit_default: 10
+
 paths:
   data_dir: ./data

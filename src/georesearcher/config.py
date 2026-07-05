@@ -78,11 +78,23 @@ class EvaluationCfg(BaseModel):
     diagnosis: DiagnosisCfg = DiagnosisCfg()
 
 
+class SearchCfg(BaseModel):
+    """M3 检索配置（plan-m3 §4）。"""
+
+    provider: str = "openalex"  # A1：默认唯一实现
+    mailto: str | None = None  # A2 polite pool
+    rate_limit_per_sec: float = 3.0  # A2 客户端限速
+    timeout: float = 20.0
+    max_retries: int = 2
+    limit_default: int = 10
+
+
 class Config(BaseModel):
     models: ModelsCfg
     storage: StorageCfg = StorageCfg()
     retrieval: RetrievalCfg = RetrievalCfg()
     evaluation: EvaluationCfg = EvaluationCfg()  # 带默认，向后兼容
+    search: SearchCfg = SearchCfg()  # M3 检索，向后兼容
 
     def api_key(self, model_cfg: ModelCfg) -> str | None:
         """从环境变量读取密钥（绝不硬编码，绝不入库）。"""

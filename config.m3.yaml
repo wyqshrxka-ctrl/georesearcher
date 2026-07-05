@@ -1,0 +1,63 @@
+# GeoResearcher M3 demo 配置（plan-m3 E1：独立库路径，隔离 M2 评估基线）
+# 使用：uv run georesearcher --config config.m3.yaml <command>
+models:
+  llm:
+    provider: deepseek
+    base_url: https://api.deepseek.com
+    model: deepseek-chat
+    temperature: 0.3
+    api_key_env: DEEPSEEK_API_KEY
+  judge:
+    provider: deepseek
+    base_url: https://api.deepseek.com
+    model: deepseek-chat
+    temperature: 0.0
+    api_key_env: DEEPSEEK_API_KEY
+  embedding:
+    provider: local
+    model: BAAI/bge-m3
+    device: cpu
+
+storage:
+  vector_store:
+    backend: chroma
+    persist_dir: ./data/m3/chroma
+    collection: papers
+  sqlite:
+    path: ./data/m3/georesearcher.db
+  files:
+    pdf_dir: ./data/m3/pdfs
+    figure_dir: ./data/m3/figures
+    report_dir: ./data/m3/reports
+
+retrieval:
+  top_k: 5
+  use_hyde: true
+  use_multi_query: true
+  use_reranker: true
+  use_bm25: true
+  use_cross_encoder: true
+  rrf_k: 60
+  hybrid_candidates: 40
+  rerank_candidates: 20
+
+evaluation:
+  eval_set_path: ./tests/eval_set/eval_set.json
+  top_k: 5
+  eval_generation: true
+  run_ragas: false
+  report_dir: ./data/m3/reports
+  diagnosis:
+    hit_rate_low: 0.6
+    faithfulness_low: 0.7
+
+search:
+  provider: openalex
+  mailto: null
+  rate_limit_per_sec: 3.0
+  timeout: 20.0
+  max_retries: 2
+  limit_default: 10
+
+paths:
+  data_dir: ./data/m3

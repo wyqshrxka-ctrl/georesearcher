@@ -1,0 +1,57 @@
+{
+  "meta": {"count": 2, "per_page": 2, "page": 1},
+  "results": [
+    {
+      "id": "https://openalex.org/W4200000001",
+      "title": "Measuring Urban Vitality with POI Data: A Spatial Approach",
+      "doi": "https://doi.org/10.1234/urban.vitality.2023",
+      "publication_date": "2023-06-15",
+      "primary_location": {
+        "source": {"display_name": "Urban Studies Journal"}
+      },
+      "authorships": [
+        {"author": {"display_name": "Jane Smith"}},
+        {"author": {"display_name": "Li Wei"}}
+      ],
+      "open_access": {"oa_status": "gold"},
+      "best_oa_location": {
+        "pdf_url": "https://example.com/oa/urban_vitality.pdf"
+      },
+      "abstract_inverted_index": {
+        "Urban": [0],
+        "vitality": [1],
+        "measurement": [2],
+        "using": [3],
+        "POI": [4],
+        "data": [5],
+        "reveals": [6],
+        "significant": [7],
+        "spatial": [8],
+        "patterns": [9]
+      }
+    },
+    {
+      "id": "https://openalex.org/W4200000002",
+      "title": "School Segregation and Educational Inequality in Urban China",
+      "publication_date": "2022-03-01",
+      "primary_location": {
+        "source": {"display_name": "Education and Urban Society"}
+      },
+      "authorships": [
+        {"author": {"display_name": "Zhang Ming"}}
+      ],
+      "open_access": {"oa_status": "closed"},
+      "best_oa_location": null,
+      "abstract_inverted_index": {
+        "This": [0],
+        "study": [1],
+        "examines": [2],
+        "school": [3],
+        "segregation": [4],
+        "in": [5],
+        "Chinese": [6],
+        "cities": [7]
+      }
+    }
+  ]
+}

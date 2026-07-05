@@ -285,5 +285,150 @@ def eval_diff(
     console.print(table)
 
 
+# ─── M3 命令：检索入库 + 解读归档 ──────────────────────────────
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="检索关键词"),
+    limit: int = typer.Option(10, help="最多返回条数"),
+    config: str = typer.Option(None, "--config", help="配置文件路径"),
+):
+    """检索 OpenAlex 并打印候选文献（不入库）。"""
+    from ..capabilities.search.openalex import OpenAlexSource
+
+    cfg = load_config(config)
+    scfg = cfg.search
+
+    source = OpenAlexSource(
+        mailto=scfg.mailto,
+        rate_limit_per_sec=scfg.rate_limit_per_sec,
+        timeout=scfg.timeout,
+        max_retries=scfg.max_retries,
+    )
+
+    console.print(f"[bold]检索:[/bold] {query}")
+    console.print("[dim]正在查询 OpenAlex...[/dim]")
+
+    try:
+        hits = source.search(query, limit=limit)
+    except Exception as e:
+        console.print(f"[red]检索失败: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not hits:
+        console.print("[yellow]未找到匹配的文献。[/yellow]")
+        raise typer.Exit(0)
+
+    table = Table(title=f"OpenAlex 检索结果（{len(hits)} 条）")
+    table.add_column("#", justify="right")
+    table.add_column("标题")
+    table.add_column("年份", justify="right")
+    table.add_column("来源")
+    table.add_column("OA")
+
+    for i, hit in enumerate(hits, 1):
+        oa_icon = ":white_check_mark:" if hit.pdf_url else ":x:"
+        title = hit.paper.title[:60] + ("..." if len(hit.paper.title) > 60 else "")
+        table.add_row(
+            str(i), title,
+            str(hit.paper.year or "-"),
+            hit.paper.venue or "-",
+            oa_icon,
+        )
+
+    console.print(table)
+
+    # Print details for each
+    for hit in hits:
+        console.print()
+        console.print(f"[bold]{hit.paper.title}[/bold]")
+        console.print(f"  ID:    {hit.paper.id}")
+        console.print(f"  作者:  {', '.join(hit.paper.authors[:5])}{'...' if len(hit.paper.authors) > 5 else ''}")
+        if hit.paper.year:
+            console.print(f"  年份:  {hit.paper.year}")
+        if hit.paper.venue:
+            console.print(f"  来源:  {hit.paper.venue}")
+        if hit.paper.doi:
+            console.print(f"  DOI:   {hit.paper.doi}")
+        console.print(f"  OA:    {hit.paper.oa_status} {'(有全文)' if hit.pdf_url else '(仅元数据)'}")
+        if hit.abstract:
+            abbr = hit.abstract[:200] + ("..." if len(hit.abstract) > 200 else "")
+            console.print(f"  摘要:  {abbr}")
+
+
+@app.command(name="ingest-search")
+def ingest_search(
+    query: str = typer.Argument(..., help="检索关键词"),
+    limit: int = typer.Option(10, help="最多入库条数"),
+    config: str = typer.Option(None, "--config", help="配置文件路径"),
+):
+    """检索 + 判重 + 入库（全文或摘要旁路）。打印汇总。"""
+    from ..capabilities.search.pipeline import ingest_from_search
+
+    cfg = load_config(config)
+
+    console.print(f"[bold]检索+入库:[/bold] {query}")
+    console.print("[dim]正在检索 OpenAlex → 判重 → 入库...[/dim]")
+
+    try:
+        result = ingest_from_search(query, limit=limit, cfg=cfg)
+    except Exception as e:
+        console.print(f"[red]执行失败: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print()
+    console.print(f"[bold green]检索入库完成![/bold green]")
+    console.print(f"  命中总数:   {result.total_hits}")
+    console.print(f"  全文入库:   {len(result.ingested_full)}")
+    console.print(f"  摘要入库:   {len(result.ingested_meta)}")
+    console.print(f"  覆盖更新:   {len(result.updated_meta)}")
+    console.print(f"  跳过已存在: {len(result.skipped_existing)}")
+    console.print(f"  失败:       {len(result.failed)}")
+
+    if result.failed:
+        for f in result.failed:
+            console.print(f"    [red]- {f['paper_id']}: {f['reason']}[/red]")
+
+    from ..storage import get_sqlite_store
+    store = get_sqlite_store(cfg)
+    total = store.count_papers()
+    store.close()
+    console.print(f"\n[dim]知识库共有 {total} 篇文献。[/dim]")
+
+
+@app.command()
+def interpret(
+    paper_id: str = typer.Argument(..., help="论文 ID（可用 search 命令查看）"),
+    config: str = typer.Option(None, "--config", help="配置文件路径"),
+):
+    """对指定论文生成结构化笔记（RQ/method/contribution/gap/findings）并落库。"""
+    from ..capabilities.interpret.interpret import interpret_paper
+
+    cfg = load_config(config)
+
+    console.print(f"[bold]解读论文:[/bold] {paper_id}")
+    console.print("[dim]正在调用 LLM 提取结构化笔记...[/dim]")
+
+    try:
+        note = interpret_paper(paper_id, cfg=cfg)
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]解读失败: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print()
+    console.print(Panel.fit(note.research_question or "（未提及）", title="Research Question"))
+    console.print(Panel.fit(note.method or "（未提及）", title="Method"))
+    console.print(Panel.fit(note.contribution or "（未提及）", title="Contribution"))
+    console.print(Panel.fit(note.gap or "（未提及）", title="Gap"))
+    console.print(Panel.fit(note.key_findings or "（未提及）", title="Key Findings"))
+    console.print(Panel.fit(note.summary or "（未提及）", title="Summary"))
+
+    console.print("[green]结构化笔记已落库 (SQLite notes 表)。[/green]")
+
+
 if __name__ == "__main__":
     app()

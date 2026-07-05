@@ -19,7 +19,7 @@ class Paper(BaseModel):
     doi: str | None = None
     arxiv_id: str | None = None
     pdf_path: str | None = None
-    oa_status: str | None = None  # open-access 状态：green/gold/closed/None
+    oa_status: str | None = None  # open-access 状态：green/gold/closed/None/oa_full/metadata_only
     retracted: bool = False
     tags: list[str] = Field(default_factory=list)  # 分类标签，如 ["教育不平等/学校隔离", "中国"]
 
@@ -30,7 +30,7 @@ class Chunk(BaseModel):
     id: str
     paper_id: str
     text: str
-    level: str = "para"  # "doc" | "section" | "para"
+    level: str = "para"  # "doc" | "section" | "para" | "abstract"
     embedding: list[float] | None = None
 
 
