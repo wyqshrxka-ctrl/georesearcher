@@ -195,5 +195,95 @@ def ask(
     console.print(f"\n[dim]模型: {answer.model}[/dim]")
 
 
+# ─── M2 命令：RAG 评估 ───────────────────────────────────────
+
+@app.command(name="eval")
+def eval_cmd(
+    dataset: str = typer.Option(None, help="评估集路径，默认取 config.evaluation.eval_set_path"),
+    top_k: int = typer.Option(None, help="检索 top_k，默认取 config"),
+    no_generation: bool = typer.Option(False, "--no-generation", help="只评检索层，跳过生成层"),
+    ragas: bool = typer.Option(False, "--ragas", help="额外跑 RAGAS 对照（需装 eval extra）"),
+    config: str = typer.Option(None, "--config", help="配置文件路径"),
+):
+    """跑 RAG 分层评估 → 终端表格 + markdown/json 报告到 report_dir。"""
+    from ..capabilities.evaluation import (
+        RAGEvaluator,
+        load_eval_set,
+        render_terminal,
+        write_json,
+        write_markdown,
+    )
+
+    cfg = load_config(config)
+    ecfg = cfg.evaluation
+    ds_path = dataset or ecfg.eval_set_path
+    k = top_k or ecfg.top_k
+    eval_generation = ecfg.eval_generation and not no_generation
+
+    console.print(f"[bold]加载评估集:[/bold] {ds_path}")
+    try:
+        cases = load_eval_set(ds_path)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[red]评估集加载失败: {e}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[dim]{len(cases)} 条 case；生成层评估={'开' if eval_generation else '关'}[/dim]")
+
+    console.print("[dim]正在评估（检索每条 case…）...[/dim]")
+    evaluator = RAGEvaluator(cfg=cfg)
+    report = evaluator.run(
+        cases, top_k=k, eval_generation=eval_generation, run_ragas=ragas
+    )
+
+    render_terminal(report, console=console)
+
+    report_dir = ecfg.report_dir or cfg.storage.files.report_dir
+    md_path = write_markdown(report, report_dir)
+    json_path = write_json(report, report_dir)
+    console.print(f"[green]报告已写出:[/green]\n  {md_path}\n  {json_path}")
+
+
+@app.command(name="eval-diff")
+def eval_diff(
+    run_a: str = typer.Argument(..., help="旧的 eval JSON 报告路径"),
+    run_b: str = typer.Argument(..., help="新的 eval JSON 报告路径"),
+):
+    """对比两次 eval 的 JSON 结果，打印指标 diff（防跷跷板/回归）。"""
+    import json
+
+    def _load(p):
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+
+    try:
+        a, b = _load(run_a), _load(run_b)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[red]读取报告失败: {e}[/red]")
+        raise typer.Exit(1)
+
+    table = Table(title="Eval Diff（B - A）")
+    table.add_column("指标")
+    table.add_column("A", justify="right")
+    table.add_column("B", justify="right")
+    table.add_column("Δ", justify="right")
+
+    def _row(label, va, vb):
+        delta = (vb or 0) - (va or 0)
+        arrow = "↑" if delta > 1e-9 else ("↓" if delta < -1e-9 else "＝")
+        color = "green" if delta > 1e-9 else ("red" if delta < -1e-9 else "dim")
+        table.add_row(label, f"{va:.3f}", f"{vb:.3f}", f"[{color}]{arrow} {delta:+.3f}[/{color}]")
+
+    for key, label in [
+        ("hit_rate", "Hit@k"), ("mrr", "MRR"), ("ndcg", "NDCG@k"),
+        ("context_precision", "Context Precision"), ("context_recall", "Context Recall"),
+    ]:
+        _row(label, a["retrieval"].get(key, 0.0), b["retrieval"].get(key, 0.0))
+
+    if a.get("generation") and b.get("generation"):
+        for key, label in [("faithfulness", "Faithfulness"), ("answer_relevancy", "Answer Relevancy")]:
+            _row(label, a["generation"].get(key, 0.0), b["generation"].get(key, 0.0))
+
+    console.print(table)
+
+
 if __name__ == "__main__":
     app()

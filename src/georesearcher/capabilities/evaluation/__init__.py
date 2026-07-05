@@ -4,7 +4,9 @@
 """
 
 from .dataset import EvalSetError, load_eval_set
+from .evaluator import RAGEvaluator
 from .generation_metrics import GenerationJudge, aggregate_generation
+from .report import render_terminal, write_json, write_markdown
 from .retrieval_metrics import aggregate_retrieval, dedup_paper_ranking
 from .schemas import (
     CaseResult,
@@ -21,9 +23,13 @@ __all__ = [
     "EvalSetError",
     "GenerationJudge",
     "GenerationMetrics",
+    "RAGEvaluator",
     "RetrievalMetrics",
     "aggregate_generation",
     "aggregate_retrieval",
     "dedup_paper_ranking",
     "load_eval_set",
+    "render_terminal",
+    "write_json",
+    "write_markdown",
 ]

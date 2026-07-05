@@ -62,10 +62,27 @@ class RetrievalCfg(BaseModel):
     rerank_candidates: int = 20
 
 
+class DiagnosisCfg(BaseModel):
+    """评估诊断阈值（经验值，非绝对；可在 config.yaml 覆盖）。"""
+
+    hit_rate_low: float = 0.6  # 检索 hit_rate 低于此 → 判"检索层弱"
+    faithfulness_low: float = 0.7  # 生成 faithfulness 低于此 → 判"生成层弱"
+
+
+class EvaluationCfg(BaseModel):
+    eval_set_path: str = "./tests/eval_set/eval_set.json"
+    top_k: int = 5
+    eval_generation: bool = True
+    run_ragas: bool = False
+    report_dir: str = "./data/reports"
+    diagnosis: DiagnosisCfg = DiagnosisCfg()
+
+
 class Config(BaseModel):
     models: ModelsCfg
     storage: StorageCfg = StorageCfg()
     retrieval: RetrievalCfg = RetrievalCfg()
+    evaluation: EvaluationCfg = EvaluationCfg()  # 带默认，向后兼容
 
     def api_key(self, model_cfg: ModelCfg) -> str | None:
         """从环境变量读取密钥（绝不硬编码，绝不入库）。"""
