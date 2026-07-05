@@ -89,12 +89,26 @@ class SearchCfg(BaseModel):
     limit_default: int = 10
 
 
+class OrchestrationCfg(BaseModel):
+    """M4 LangGraph 编排配置（plan-m4 §7）。"""
+
+    router_confidence_threshold: float = 0.6  # 低于此走 CLARIFY
+    search_min_hits: int = 3                 # 检索命中 < 此值 → REFLECT 重搜
+    search_max_rounds: int = 2               # 循环①上限
+    crag_quality_threshold: float = 0.3      # top1 rerank 分 < 此值 → 联网补充
+    crag_max_rounds: int = 1                 # 循环②上限（防烧钱）
+    review_max_rounds: int = 3               # 循环③人机重答上限
+    clarify_max_rounds: int = 2              # CLARIFY 反问上限
+    checkpoint_path: str = "./data/m4/checkpoints.sqlite"  # SqliteSaver 持久化
+
+
 class Config(BaseModel):
     models: ModelsCfg
     storage: StorageCfg = StorageCfg()
     retrieval: RetrievalCfg = RetrievalCfg()
     evaluation: EvaluationCfg = EvaluationCfg()  # 带默认，向后兼容
     search: SearchCfg = SearchCfg()  # M3 检索，向后兼容
+    orchestration: OrchestrationCfg = OrchestrationCfg()  # M4 编排，向后兼容
 
     def api_key(self, model_cfg: ModelCfg) -> str | None:
         """从环境变量读取密钥（绝不硬编码，绝不入库）。"""

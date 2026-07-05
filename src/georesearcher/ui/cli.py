@@ -430,5 +430,163 @@ def interpret(
     console.print("[green]结构化笔记已落库 (SQLite notes 表)。[/green]")
 
 
+# ---------------------------------------------------------------------------
+# M4: LangGraph 编排
+# ---------------------------------------------------------------------------
+
+@app.command()
+def orchestrate(
+    query: str = typer.Argument(None, help="研究主题或问题；--resume 时可省略"),
+    resume: str = typer.Option(None, help="从 checkpoint 恢复的 thread_id（跨进程）"),
+    feedback: str = typer.Option(None, help="--resume 时注入的人机反馈"),
+    pause: bool = typer.Option(False, help="跑到人机中断即退出并打印 thread_id（演示持久化）"),
+    config: str = typer.Option(None, help="配置文件路径，默认 config.yaml"),
+):
+    """运行 Agent 编排总控图。
+
+    - 无 resume：新会话，stream 到 human_review 中断
+        · 默认（无 --pause）：单命令内捕获中断 → input() 拿反馈 → Command(resume=...) 续跑
+        · --pause：打印 answer + thread_id 后退出（状态存 SqliteSaver，可跨进程恢复）
+    - 有 resume：全新进程，用 SqliteSaver 按 thread_id 恢复 → Command(resume=feedback) 续跑
+    """
+    import uuid
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    from langgraph.types import Command
+    from ..config import load_config
+    from ..orchestration import NodeDeps, build_graph
+    from ..capabilities.rag.retriever import RetrievalConfig, RetrievalPipeline
+    from ..capabilities.rag.generator import Generator
+
+    cfg = load_config(config)
+
+    # Build NodeDeps
+    deps = NodeDeps(
+        cfg=cfg,
+        llm=None,  # lazily resolved by RetrievalPipeline / Generator / router
+        embedder=None,
+        vector_store=None,
+        sqlite_store=None,
+        retrieval_pipeline=None,
+        generator=None,
+        retrieval_cfg=RetrievalConfig(),
+    )
+
+    # Lazily build real deps (expensive imports)
+    # Note: we defer heavy imports to avoid loading models unnecessarily
+    from ..models.llm import get_llm, get_judge
+    from ..models.embedding import get_embedder
+    from ..storage.vector_store import get_vector_store
+    from ..storage.sqlite_store import get_sqlite_store
+
+    deps.llm = get_llm(cfg)
+    deps.embedder = get_embedder(cfg)
+    deps.vector_store = get_vector_store(cfg)
+    deps.sqlite_store = get_sqlite_store(cfg)
+    deps.retrieval_pipeline = RetrievalPipeline(cfg=cfg, llm=deps.llm, embedder=deps.embedder)
+    deps.generator = Generator(cfg=cfg, llm=deps.llm)
+    deps.retrieval_cfg = RetrievalConfig()
+
+    thread_id = resume or str(uuid.uuid4())[:8]
+
+    # Checkpointer: SqliteSaver for persistence (b+)
+    import os
+    ckpt_path = cfg.orchestration.checkpoint_path
+    os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+    checkpointer = SqliteSaver.from_conn_string(ckpt_path)
+
+    graph = build_graph(deps, checkpointer=checkpointer)
+    stream_config = {"configurable": {"thread_id": thread_id}}
+
+    # --- Resume mode ---
+    if resume:
+        if not feedback:
+            console.print("[red]--resume 必须配合 --feedback 使用[/red]")
+            raise typer.Exit(1)
+        console.print(f"[bold]从 checkpoint 恢复:[/bold] thread_id={thread_id}")
+        for event in graph.stream(Command(resume=feedback), stream_config):
+            _print_event(event)
+        console.print(f"\n[green]完成。thread_id={thread_id}（可再次 --resume）[/green]")
+        return
+
+    # --- New session ---
+    if not query:
+        console.print("[red]请提供查询主题[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]GeoResearcher Agent[/bold]")
+    console.print(f"[dim]thread_id={thread_id}[/dim]")
+    console.print()
+
+    for event in graph.stream({"query": query}, stream_config):
+        _print_event(event)
+
+    # Handle interrupt for single-command resume (fluent demo)
+    state = graph.get_state(stream_config)
+    if state.next and not pause:
+        # Interrupted at human_review
+        task = state.tasks[0] if state.tasks else None
+        if task and task.interrupts:
+            interrupt_value = task.interrupts[0].value
+            answer = interrupt_value.get("answer", "")
+            citations = interrupt_value.get("citations", [])
+            prompt_text = interrupt_value.get("prompt", "满意吗？回车通过，或输入追问让我重答")
+
+            console.print()
+            console.print("[bold]回答:[/bold]")
+            console.print(Markdown(answer[:2000]))
+            if citations:
+                console.print("\n[bold]引用:[/bold]")
+                for c in citations[:5]:
+                    console.print(f"  [{c['index']}] {c['reference'][:120]}")
+            console.print(f"\n[dim]{prompt_text}[/dim]")
+
+            user_input = input("> ").strip()
+            if user_input:
+                console.print(f"[dim]收到反馈，正在重答...[/dim]")
+                for event in graph.stream(Command(resume=user_input), stream_config):
+                    _print_event(event)
+                state = graph.get_state(stream_config)
+                if not state.next:
+                    # Reached END after review
+                    pass
+
+    # --- Pause mode (persistence demo) ---
+    if pause and state.next:
+        task = state.tasks[0] if state.tasks else None
+        if task and task.interrupts:
+            interrupt_value = task.interrupts[0].value
+            answer = interrupt_value.get("answer", "")
+            console.print()
+            console.print(f"[bold yellow]已暂停（可跨进程恢复）[/bold yellow]")
+            console.print(f"thread_id = [bold]{thread_id}[/bold]")
+            console.print()
+            console.print(f"恢复命令: [dim]uv run georesearcher --config {config or 'config.m4.yaml'} orchestrate --resume {thread_id} --feedback '你的追问'[/dim]")
+            return
+
+    # Final summary
+    final_state = graph.get_state(stream_config)
+    if final_state.values:
+        trace = final_state.values.get("trace", [])
+        if trace:
+            console.print("\n[bold dim]执行轨迹:[/bold dim]")
+            for t in trace:
+                console.print(f"  [dim]{t}[/dim]")
+
+    console.print(f"\n[green]完成。[/green]")
+
+
+def _print_event(event: dict) -> None:
+    """Print a graph stream event with rich formatting."""
+    for node_name, node_output in event.items():
+        if not node_output:
+            continue
+        trace_msgs = node_output.get("trace", [])
+        for msg in trace_msgs:
+            console.print(f"[dim][{node_name}][/dim] {msg}")
+        error = node_output.get("error")
+        if error:
+            console.print(f"[red][{node_name}] ERROR: {error}[/red]")
+
+
 if __name__ == "__main__":
     app()

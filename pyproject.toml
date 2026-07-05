@@ -31,6 +31,7 @@ rag = [
 eval = ["ragas>=0.2"]
 ui = ["streamlit>=1.37"]
 gis = ["mcp>=1.0"]             # MCP client for gis-mcp / qgis_mcp (used from M4)
+orchestration = ["langgraph>=0.2", "langgraph-checkpoint-sqlite>=1.0"]  # M4
 dev = ["pytest>=8.0", "pytest-cov>=5.0"]
 
 [project.scripts]

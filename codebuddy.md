@@ -94,9 +94,9 @@ research_agent/
   - **首次评估基线**（36 条，top_k=5）：检索层 Hit@5≈0.53 / MRR=0.50 / NDCG=0.44；诊断"检索层偏弱"。
   - **踩坑修复（写进面试文档）**：faithfulness 曾误得 0.107——按句号切句把 APA 参考文献列表切成碎片全判 no（76% 判定句是垃圾）；修复=`claim_sentences()` 过滤参考文献/话术/引用碎片 + 给 judge 完整上下文。
 - [x] **M3 检索入库 + 解读归档完成**（2026-07-05）：OpenAlex 单源 + PaperSource 接口 + DOI 优先去重 + 摘要旁路入库 + interpret 结构化笔记；CLI `search`/`ingest-search`/`interpret`；独立库 `config.m3.yaml`→`./data/m3/`。真机端到端因 Cloudflare TLS fingerprinting 未通（curl 可通、Python urllib 被拦），已记录排障链于 `plan-m3--20260705--v1.md` §11。
-- [x] **M4 编排设计完成**（2026-07-05，未开发）：经 grill 定 M4=LangGraph 编排（原 plan M4=GIS 顺延）。**三层 Agent 范式**（总控 Router/Intent-routing + RAG 质量控制 Corrective RAG + GIS 预留 ReAct）；完整 5 分支意图路由骨架，真接 SEARCH+ASK、PLOT/GIS/WRITE 占位；HumanReview 用 interrupt+SqliteSaver 断点续跑（b+）。计划文档 `plan-m4--20260705--v1.md`（T0-T9 可交接弱模型），ADR-16~19 入 design。langgraph 作 optional extra。
+- [x] **M4 编排设计完成**（2026-07-05）：经 grill 定 M4=LangGraph 编排（原 plan M4=GIS 顺延）。**三层 Agent 范式**（总控 Router/Intent-routing + RAG 质量控制 Corrective RAG + GIS 预留 ReAct）；完整 5 分支意图路由骨架，真接 SEARCH+ASK、PLOT/GIS/WRITE 占位；HumanReview 用 interrupt+SqliteSaver 断点续跑（b+）。计划文档 `plan-m4--20260705--v1.md`（T0-T9 可交接弱模型），ADR-16~19 入 design。langgraph 作 optional extra。
+- [x] **M4 开发完成**（2026-07-05）：T0-T9 全部实现，211/211 测试全绿（新增 30 个 orchestration + 2 个 config 测试，零回归）。`orchestration/` 包（state/router/nodes/graph）、config（OrchestrationCfg + config.m4.yaml）、CLI（orchestrate 命令 3 模式）。图结构：1 动态路由 + 3 循环（重搜/CRAG/人机重答）+ 1 中断（interrupt+SqliteSaver 持久化）。langgraph==1.2.7 + checkpoint-sqlite==3.1.0。
 - [ ] M2 收尾：T7 RAGAS 对照（可选）、design 回并 ADR-12~15
-- [ ] M4 开发：按 plan-m4 T0-T9 实现 orchestration 包
 - [ ] 后续：GIS 工具链（MCP）/ 顶刊绘图 / Streamlit（编排之后独立里程碑）
 
 ## 9. 关键工程事实（供后续会话）
@@ -114,3 +114,6 @@ research_agent/
 - **M2 已知教训**：LLM-as-judge 的 faithfulness，"怎么定义可判定的断言"比"用哪个 judge"更关键——机械按标点切句会被答案格式（参考文献/引用/Markdown）污染。遇到反常指标先怀疑测量工具、看分布判性质、拉最异常样本定位根因、量化验证、固化回归测试。
 - **报告输出**：`data/reports/eval--{timestamp}.md|json`（已 gitignore）；`eval-diff run_a.json run_b.json` 做两次跑的指标 Δ 对比（回归防跷跷板）。
 - **测试运行**：评估相关测试需 `uv run --extra dev --extra rag pytest tests/test_eval*.py tests/test_retrieval_metrics.py tests/test_generation_metrics.py tests/test_evaluator.py tests/test_report.py tests/test_gen_eval_set.py`。
+- **M4 编排架构**：LangGraph StateGraph，共享 ResearchState（TypedDict + Annotated[list, operator.add] reducer），11 个节点（router/clarify/search/reflect/interpret/rag_qa/plot/gis/write/human_review），4 条条件边。Router 用 LLM 结构化 JSON 输出 + 置信度门控 + CLARIFY 节点反问。CRAG 用检索 top1 rerank 分（非 LLM 自评）触发联网补充。HumanReview 用标准 `interrupt()` + SqliteSaver 持久化（b+）。配置在 `orchestration` 段（7 个阈值）。`orchestrate` 命令 3 种模式：默认流畅（单命令内 interrupt→input→resume）、`--pause` 打印 thread_id 退出、`--resume <id> --feedback` 跨进程恢复。
+- **M4 测试策略**：全 mock（零 LLM/零网络/零模型下载）。纯函数打 `_parse_intent_json`（7 个）+ `_route_after_*`（13 个条件边）。节点用 fake deps（FakeRetrievalPipeline/FakeGenerator/FakeLLM）。图集成用 fake 节点 + MemorySaver 验证走向/循环上限/中断恢复。
+- **M4 运行**：需 `uv sync --extra orchestration --extra rag`；`uv run georesearcher --config config.m4.yaml orchestrate "..."`。M4 用独立库 `./data/m4/`（config.m4.yaml）。

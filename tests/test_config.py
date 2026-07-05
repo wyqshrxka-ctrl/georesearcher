@@ -61,3 +61,37 @@ def test_search_backward_compatible(tmp_path):
     assert cfg.search.provider == "openalex"
     assert cfg.search.rate_limit_per_sec == 3.0
     assert cfg.search.limit_default == 10
+
+
+# ---------------------------------------------------------------------------
+# T8: M4 orchestration config
+# ---------------------------------------------------------------------------
+
+def test_orchestration_section_loads():
+    """M4 orchestration section 在 config.yaml 中存在且正确加载。"""
+    cfg = load_config()
+    oc = cfg.orchestration
+    assert oc.router_confidence_threshold == 0.6
+    assert oc.search_min_hits == 3
+    assert oc.search_max_rounds == 2
+    assert oc.crag_quality_threshold == 0.3
+    assert oc.crag_max_rounds == 1
+    assert oc.review_max_rounds == 3
+    assert oc.clarify_max_rounds == 2
+    assert "checkpoints.sqlite" in oc.checkpoint_path
+
+
+def test_orchestration_backward_compatible(tmp_path):
+    """不写 orchestration 段也能加载（向后兼容）。"""
+    minimal = textwrap.dedent(
+        """
+        models:
+          llm: {provider: deepseek, model: deepseek-chat, api_key_env: DEEPSEEK_API_KEY}
+          judge: {provider: deepseek, model: deepseek-chat, api_key_env: DEEPSEEK_API_KEY}
+          embedding: {provider: local, model: BAAI/bge-m3}
+        """
+    )
+    raw = __import__("yaml").safe_load(minimal)
+    cfg = Config.model_validate(raw)
+    assert cfg.orchestration.router_confidence_threshold == 0.6
+    assert cfg.orchestration.crag_max_rounds == 1

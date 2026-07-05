@@ -60,5 +60,15 @@ search:                           # M3 检索配置（plan-m3 §4）
   max_retries: 2
   limit_default: 10
 
+orchestration:                    # M4 LangGraph 编排（plan-m4 §7）
+  router_confidence_threshold: 0.6
+  search_min_hits: 3
+  search_max_rounds: 2
+  crag_quality_threshold: 0.3
+  crag_max_rounds: 1
+  review_max_rounds: 3
+  clarify_max_rounds: 2
+  checkpoint_path: ./data/m4/checkpoints.sqlite
+
 paths:
   data_dir: ./data
