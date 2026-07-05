@@ -139,6 +139,9 @@ class OpenAlexSource:
         self._max_retries = max_retries
         self._urlopen = _urlopen or urllib.request.urlopen
         self._last_call: float = 0.0
+        # 已知问题：部分网络环境下 Python urllib 的 TLS 指纹可能被
+        # Cloudflare 识别为自动化流量并阻断（见 plan-m3 §11.3-11.4）。
+        # 如遇 SSL handshake timeout，可尝试换网络或降低请求频率。
 
     def search(self, query: str, *, limit: int = 10) -> list[SearchHit]:
         """调 OpenAlex /works?search=... 返回 SearchHit 列表。"""

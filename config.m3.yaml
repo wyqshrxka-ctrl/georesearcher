@@ -53,7 +53,7 @@ evaluation:
 
 search:
   provider: openalex
-  mailto: null
+  mailto: georesearcher@example.com
   rate_limit_per_sec: 3.0
   timeout: 20.0
   max_retries: 2

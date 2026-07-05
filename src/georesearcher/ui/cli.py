@@ -203,7 +203,7 @@ def eval_cmd(
     top_k: int = typer.Option(None, help="检索 top_k，默认取 config"),
     no_generation: bool = typer.Option(False, "--no-generation", help="只评检索层，跳过生成层"),
     ragas: bool = typer.Option(False, "--ragas", help="额外跑 RAGAS 对照（需装 eval extra）"),
-    config: str = typer.Option(None, "--config", help="配置文件路径"),
+    config: str = typer.Option(None, help="配置文件路径，默认 config.yaml"),
 ):
     """跑 RAG 分层评估 → 终端表格 + markdown/json 报告到 report_dir。"""
     from ..capabilities.evaluation import (
@@ -292,7 +292,7 @@ def eval_diff(
 def search(
     query: str = typer.Argument(..., help="检索关键词"),
     limit: int = typer.Option(10, help="最多返回条数"),
-    config: str = typer.Option(None, "--config", help="配置文件路径"),
+    config: str = typer.Option(None, help="配置文件路径，默认 config.yaml"),
 ):
     """检索 OpenAlex 并打印候选文献（不入库）。"""
     from ..capabilities.search.openalex import OpenAlexSource
@@ -361,7 +361,7 @@ def search(
 def ingest_search(
     query: str = typer.Argument(..., help="检索关键词"),
     limit: int = typer.Option(10, help="最多入库条数"),
-    config: str = typer.Option(None, "--config", help="配置文件路径"),
+    config: str = typer.Option(None, help="配置文件路径，默认 config.yaml"),
 ):
     """检索 + 判重 + 入库（全文或摘要旁路）。打印汇总。"""
     from ..capabilities.search.pipeline import ingest_from_search
@@ -400,7 +400,7 @@ def ingest_search(
 @app.command()
 def interpret(
     paper_id: str = typer.Argument(..., help="论文 ID（可用 search 命令查看）"),
-    config: str = typer.Option(None, "--config", help="配置文件路径"),
+    config: str = typer.Option(None, help="配置文件路径，默认 config.yaml"),
 ):
     """对指定论文生成结构化笔记（RQ/method/contribution/gap/findings）并落库。"""
     from ..capabilities.interpret.interpret import interpret_paper
