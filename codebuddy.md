@@ -93,8 +93,11 @@ research_agent/
   - CLI 命令 `eval` + `eval-diff`；config 加 `evaluation` 段（含诊断阈值）。
   - **首次评估基线**（36 条，top_k=5）：检索层 Hit@5≈0.53 / MRR=0.50 / NDCG=0.44；诊断"检索层偏弱"。
   - **踩坑修复（写进面试文档）**：faithfulness 曾误得 0.107——按句号切句把 APA 参考文献列表切成碎片全判 no（76% 判定句是垃圾）；修复=`claim_sentences()` 过滤参考文献/话术/引用碎片 + 给 judge 完整上下文。
-- [ ] M2 收尾：T7 RAGAS 对照（可选）、T13 文档（design ADR-12、plan 勾选）
-- [ ] M3+ GIS 工具链 / 顶刊绘图 / LangGraph 编排（后续里程碑）
+- [x] **M3 检索入库 + 解读归档完成**（2026-07-05）：OpenAlex 单源 + PaperSource 接口 + DOI 优先去重 + 摘要旁路入库 + interpret 结构化笔记；CLI `search`/`ingest-search`/`interpret`；独立库 `config.m3.yaml`→`./data/m3/`。真机端到端因 Cloudflare TLS fingerprinting 未通（curl 可通、Python urllib 被拦），已记录排障链于 `plan-m3--20260705--v1.md` §11。
+- [x] **M4 编排设计完成**（2026-07-05，未开发）：经 grill 定 M4=LangGraph 编排（原 plan M4=GIS 顺延）。**三层 Agent 范式**（总控 Router/Intent-routing + RAG 质量控制 Corrective RAG + GIS 预留 ReAct）；完整 5 分支意图路由骨架，真接 SEARCH+ASK、PLOT/GIS/WRITE 占位；HumanReview 用 interrupt+SqliteSaver 断点续跑（b+）。计划文档 `plan-m4--20260705--v1.md`（T0-T9 可交接弱模型），ADR-16~19 入 design。langgraph 作 optional extra。
+- [ ] M2 收尾：T7 RAGAS 对照（可选）、design 回并 ADR-12~15
+- [ ] M4 开发：按 plan-m4 T0-T9 实现 orchestration 包
+- [ ] 后续：GIS 工具链（MCP）/ 顶刊绘图 / Streamlit（编排之后独立里程碑）
 
 ## 9. 关键工程事实（供后续会话）
 - Python 3.11（/opt/homebrew，uv 管理）；venv 在 .venv/。运行命令用 `uv run georesearcher ...` 或 `uv run pytest`。
